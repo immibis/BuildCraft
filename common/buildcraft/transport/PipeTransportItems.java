@@ -217,7 +217,7 @@ public class PipeTransportItems extends PipeTransport {
 
 			return pipe.pipe.transport instanceof PipeTransportItems;
 		} else if (entity instanceof IInventory)
-			if (Transactor.getTransactorFor(entity).add(item.getItemStack(), o.getOpposite(), false).stackSize > 0)
+			if (Transactor.getTransactorFor(entity, o.getOpposite()).add(item.getItemStack(), o.getOpposite(), false).stackSize > 0)
 				return true;
 
 		return false;
@@ -334,7 +334,7 @@ public class PipeTransportItems extends PipeTransport {
 			((PipeTransportItems) pipe.pipe.transport).entityEntering(data.item, data.output);
 		} else if (tile instanceof IInventory) {
 			if (!CoreProxy.proxy.isRenderWorld(worldObj)) {
-				ItemStack added = Transactor.getTransactorFor(tile).add(data.item.getItemStack(), data.output.getOpposite(), true);
+				ItemStack added = Transactor.getTransactorFor(tile, data.output.getOpposite()).add(data.item.getItemStack(), data.output.getOpposite(), true);
 
 				data.item.getItemStack().stackSize -= added.stackSize;
 

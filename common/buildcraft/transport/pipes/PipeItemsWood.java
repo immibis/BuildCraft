@@ -14,6 +14,9 @@ import net.minecraft.tileentity.TileEntity;
 import net.minecraft.world.World;
 import net.minecraftforge.common.ForgeDirection;
 import net.minecraftforge.common.ISidedInventory;
+import net.minecraftforge.inventory.ICustomInventory;
+import net.minecraftforge.inventory.IStackFilter;
+import net.minecraftforge.inventory.InventoryAdapters;
 import buildcraft.api.core.Position;
 import buildcraft.api.inventory.ISpecialInventory;
 import buildcraft.api.power.IPowerProvider;
@@ -96,131 +99,78 @@ public class PipeItemsWood extends Pipe implements IPowerReceptor {
 		pos.moveForwards(1);
 		TileEntity tile = w.getBlockTileEntity((int) pos.x, (int) pos.y, (int) pos.z);
 
-		if (tile instanceof IInventory) {
-			if (!PipeManager.canExtractItems(this, w, (int) pos.x, (int) pos.y, (int) pos.z))
-				return;
-
-			IInventory inventory = (IInventory) tile;
-
-			ItemStack[] extracted = checkExtract(inventory, true, pos.orientation.getOpposite());
-			if (extracted == null)
-				return;
-
-			for (ItemStack stack : extracted) {
-				if (stack == null || stack.stackSize == 0) {
-					powerProvider.useEnergy(1, 1, false);
-					continue;
-				}
-
-				Position entityPos = new Position(pos.x + 0.5, pos.y + 0.5, pos.z + 0.5, pos.orientation.getOpposite());
-
-				entityPos.moveForwards(0.6);
-
-				IPipedItem entity = new EntityPassiveItem(w, entityPos.x, entityPos.y, entityPos.z, stack);
-
-				((PipeTransportItems) transport).entityEntering(entity, entityPos.orientation);
-			}
+		ICustomInventory forgeInventory = null;
+		boolean isSpecialInventory = (tile instanceof ISpecialInventory);
+		
+		if(!isSpecialInventory) {
+		    forgeInventory = InventoryAdapters.asCustomInventory(tile, pos.orientation.getOpposite());
+		    if(forgeInventory == null)
+		        return;
 		}
+        
+        if (!PipeManager.canExtractItems(this, w, (int) pos.x, (int) pos.y, (int) pos.z))
+			return;
+
+        ItemStack[] extracted = null;
+        
+        if(isSpecialInventory)
+            extracted = checkExtractSpecial((ISpecialInventory)tile, true, pos.orientation.getOpposite());
+        else
+            extracted = checkExtractForge(forgeInventory, true, pos.orientation.getOpposite());
+        
+        if (extracted == null)
+			return;
+
+		for (ItemStack stack : extracted) {
+			if (stack == null || stack.stackSize == 0) {
+				powerProvider.useEnergy(1, 1, false);
+				continue;
+			}
+
+			Position entityPos = new Position(pos.x + 0.5, pos.y + 0.5, pos.z + 0.5, pos.orientation.getOpposite());
+
+			entityPos.moveForwards(0.6);
+
+			IPipedItem entity = new EntityPassiveItem(w, entityPos.x, entityPos.y, entityPos.z, stack);
+
+			((PipeTransportItems) transport).entityEntering(entity, entityPos.orientation);
+		}
+	}
+	
+	public ItemStack[] checkExtractSpecial(ISpecialInventory inventory, boolean doRemove, ForgeDirection from) {
+	    ItemStack[] stacks = inventory.extractItem(doRemove, from, (int) powerProvider.getEnergyStored());
+        if (stacks != null && doRemove) {
+            for (ItemStack stack : stacks) {
+                if (stack != null) {
+                    powerProvider.useEnergy(stack.stackSize, stack.stackSize, doRemove);
+                }
+            }
+        }
+        return stacks;
+	}
+	
+	public IStackFilter getExtractFilter() {
+	    return IStackFilter.MATCH_ANY;
 	}
 
 	/**
 	 * Return the itemstack that can be if something can be extracted from this inventory, null if none. On certain cases, the extractable slot depends on the
 	 * position of the pipe.
 	 */
-	public ItemStack[] checkExtract(IInventory inventory, boolean doRemove, ForgeDirection from) {
-
-		// / ISPECIALINVENTORY
-		if (inventory instanceof ISpecialInventory) {
-			ItemStack[] stacks = ((ISpecialInventory) inventory).extractItem(doRemove, from, (int) powerProvider.getEnergyStored());
-			if (stacks != null && doRemove) {
-				for (ItemStack stack : stacks) {
-					if (stack != null) {
-						powerProvider.useEnergy(stack.stackSize, stack.stackSize, true);
-					}
-				}
-			}
-			return stacks;
-		}
-
-		if (inventory instanceof ISidedInventory) {
-			ISidedInventory sidedInv = (ISidedInventory) inventory;
-
-			int first = sidedInv.getStartInventorySide(from);
-			int last = first + sidedInv.getSizeInventorySide(from) - 1;
-
-			IInventory inv = Utils.getInventory(inventory);
-
-			ItemStack result = checkExtractGeneric(inv, doRemove, from, first, last);
-
-			if (result != null)
-				return new ItemStack[] { result };
-		} else if (inventory.getSizeInventory() == 2) {
-			// This is an input-output inventory
-
-			int slotIndex = 0;
-
-			if (from == ForgeDirection.DOWN || from == ForgeDirection.UP) {
-				slotIndex = 0;
-			} else {
-				slotIndex = 1;
-			}
-
-			ItemStack slot = inventory.getStackInSlot(slotIndex);
-
-			if (slot != null && slot.stackSize > 0) {
-				if (doRemove)
-					return new ItemStack[] { inventory.decrStackSize(slotIndex, (int) powerProvider.useEnergy(1, slot.stackSize, true)) };
-				else
-					return new ItemStack[] { slot };
-			}
-		} else if (inventory.getSizeInventory() == 3) {
-			// This is a furnace-like inventory
-
-			int slotIndex = 0;
-
-			if (from == ForgeDirection.UP) {
-				slotIndex = 0;
-			} else if (from == ForgeDirection.DOWN) {
-				slotIndex = 1;
-			} else {
-				slotIndex = 2;
-			}
-
-			ItemStack slot = inventory.getStackInSlot(slotIndex);
-
-			if (slot != null && slot.stackSize > 0) {
-				if (doRemove)
-					return new ItemStack[] { inventory.decrStackSize(slotIndex, (int) powerProvider.useEnergy(1, slot.stackSize, true)) };
-				else
-					return new ItemStack[] { slot };
-			}
-		} else {
-			// This is a generic inventory
-			IInventory inv = Utils.getInventory(inventory);
-
-			ItemStack result = checkExtractGeneric(inv, doRemove, from, 0, inv.getSizeInventory() - 1);
-
-			if (result != null)
-				return new ItemStack[] { result };
-		}
-
-		return null;
-	}
-
-	public ItemStack checkExtractGeneric(IInventory inventory, boolean doRemove, ForgeDirection from, int start, int stop) {
-		for (int k = start; k <= stop; ++k) {
-			ItemStack slot = inventory.getStackInSlot(k);
-
-			if (slot != null && slot.stackSize > 0) {
-				if (doRemove) {
-					return inventory.decrStackSize(k, (int) powerProvider.useEnergy(1, slot.stackSize, true));
-				} else {
-					return slot;
-				}
-			}
-		}
-
-		return null;
+	public ItemStack[] checkExtractForge(ICustomInventory inventory, boolean doRemove, ForgeDirection from) {
+	    
+	    int maxExtracted = (int)powerProvider.getEnergyStored();
+	    if(maxExtracted <= 0)
+	        return null;
+	    
+	    ItemStack is = inventory.extract(getExtractFilter(), maxExtracted, !doRemove);
+	    if(is == null)
+	        return null;
+	    
+	    if(doRemove)
+	        powerProvider.useEnergy(is.stackSize, is.stackSize, true);
+	    
+	    return new ItemStack[] {is};
 	}
 
 	@Override

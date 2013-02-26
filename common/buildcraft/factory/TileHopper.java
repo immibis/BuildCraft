@@ -41,7 +41,7 @@ public class TileHopper extends TileBuildCraft implements IInventory {
 
 		if (tile == null) return;
 
-		ITransactor transactor = Transactor.getTransactorFor(tile);
+		ITransactor transactor = Transactor.getTransactorFor(tile, ForgeDirection.UP);
 
 		if (transactor == null) return;
 

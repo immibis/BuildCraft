@@ -77,7 +77,7 @@ public class Utils {
 			pos.moveForwards(1.0);
 
 			TileEntity tileInventory = world.getBlockTileEntity((int) pos.x, (int) pos.y, (int) pos.z);
-			ITransactor transactor = Transactor.getTransactorFor(tileInventory);
+			ITransactor transactor = Transactor.getTransactorFor(tileInventory, orientation.getOpposite());
 			if (transactor != null && !(tileInventory instanceof TileEngine) && transactor.add(stack, from, false).stackSize > 0) {
 				possibleInventories.add(transactor);
 			}
